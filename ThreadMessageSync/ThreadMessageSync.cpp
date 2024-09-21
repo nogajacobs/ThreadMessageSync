@@ -8,117 +8,123 @@
 
 using namespace std;
 
-// משתנים גלובליים
 mutex mtx; // מנעול לניהול גישה למידע משותף בין הת'רדים
-condition_variable cv; // משתנה שמאפשר לת'רדים לחכות לתנאים מסוימים
-queue<int> thread1_messages, thread2_messages; // תורים לאחסון המספרים המתקבלים מתהליך 1 ותהליך 2
-bool new_message_thread1 = false, new_message_thread2 = false; // האם יש הודעה חדשה בתורים
+condition_variable cv_thread1; // משתנה שמאפשר ל-thread 1 לחכות
+condition_variable cv_thread2; // משתנה שמאפשר ל-thread 2 לחכות
+condition_variable cv_thread3; // משתנה שמאפשר ל-thread 3 לחכות
+queue<int> thread1_messages, thread2_messages; // תורים לאחסון המספרים
+bool new_message_thread1 = false, new_message_thread2 = false, new_message_thread3 = false; // האם יש הודעה חדשה בתורים
 
-// פרמטרים שונים
+int number_to_send;
+int last_received_thread1 = 0;
+int last_received_thread2 = 0;
+
 int message_delay_seconds = 1; // הזמן שיחכה כל תהליך לפני שליחה של הודעה חדשה
-int check_interval_seconds = 5; // הזמן שיחכה תהליך 3 לפני בדיקה מחדש
-int max_initial_random_number = 10; // הגבול העליון למספרים הרנדומליים הראשוניים
-int max_increment = 10; // הגבול העליון להגדלת המספרים
-int increment_value = 10; // ערך ההגדלה עבור כל מספר
+int check_interval_seconds = 5; // זמן השהייה בין כל בדיקת השוואה (5 שניות)
 
-// פונקציה ליצירת מספר רנדומלי
-int generate_random_number(int previous_number, bool is_first) {
-    random_device rd; // מכשיר ליצירת ערכים רנדומליים
-    mt19937 gen(rd()); // גנרטור מספרים רנדומליים
-    // התפלגות מספרים רנדומליים
-    uniform_int_distribution<> dist(
-        is_first ? 0 : previous_number + 1,
-        is_first ? max_initial_random_number : previous_number + max_increment
-    );
-    return dist(gen); // מחזירה מספר רנדומלי
+int generate_random_number(int min, int max) {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> dist(min, max);
+    return dist(gen);
 }
 
 // פונקציה לתהליך 1
 void threadFunction1() {
-    int count = generate_random_number(0, true); // מתחיל עם מספר רנדומלי בין 0 ל-10
     while (true) {
-        this_thread::sleep_for(chrono::seconds(message_delay_seconds)); // השהייה
-        unique_lock<mutex> lock(mtx); // לוקח את המנעול
-        if (rand() % 2 == 0) { // בוחן אם צריך לשלוח הודעה חדשה
-            count = generate_random_number(count, false); // יוצר מספר רנדומלי חדש
-            thread1_messages.push(count); // מוסיף את המספר לתור של תהליך 1
-            new_message_thread1 = true; // מעדכן שיש הודעה חדשה בתור של תהליך 1
-            cout << "[Thread 1] Received number: " << count << endl; // מדפיס את המספר
-            count += increment_value; // מגדיל את המספר לצורך ההודעה הבאה
-            cv.notify_all(); // מיידע את כל הת'רדים
-        }
-        lock.unlock(); // משחרר את המנעול
+        unique_lock<mutex> lock(mtx);
+        cv_thread1.wait(lock, [] { return new_message_thread1; }); // מחכה להודעה חדשה
+        thread1_messages.push(number_to_send); // מוסיף את המספר לתור של תהליך 1
+        //int received_count = thread1_messages.front();
+        //thread1_messages.pop();
+        cout << "[Thread 1] Received number: " << number_to_send << endl;
+        //last_received_thread1 = received_count; // מעדכן את המספר האחרון
+        new_message_thread1 = false; // מעדכן שאין הודעה חדשה
     }
 }
 
 // פונקציה לתהליך 2
 void threadFunction2() {
-    int count = generate_random_number(0, true); // מתחיל עם מספר רנדומלי בין 0 ל-10
     while (true) {
-        this_thread::sleep_for(chrono::seconds(message_delay_seconds)); // השהייה
-        unique_lock<mutex> lock(mtx); // לוקח את המנעול
-        if (rand() % 2 == 0) { // בוחן אם צריך לשלוח הודעה חדשה
-            count = generate_random_number(count, false); // יוצר מספר רנדומלי חדש
-            thread2_messages.push(count); // מוסיף את המספר לתור של תהליך 2
-            new_message_thread2 = true; // מעדכן שיש הודעה חדשה בתור של תהליך 2
-            cout << "[Thread 2] Received number: " << count << endl; // מדפיס את המספר
-            count += increment_value; // מגדיל את המספר לצורך ההודעה הבאה
-            cv.notify_all(); // מיידע את כל הת'רדים
-        }
-        lock.unlock(); // משחרר את המנעול
+        unique_lock<mutex> lock(mtx);
+        cv_thread2.wait(lock, [] { return new_message_thread2; }); // מחכה להודעה חדשה
+        thread2_messages.push(number_to_send); // מוסיף את המספר לתור של תהליך 2
+        //int received_count = thread2_messages.front();
+        //thread2_messages.pop();
+        cout << "[Thread 2] Received number: " << number_to_send << endl;
+        //last_received_thread2 = received_count; // מעדכן את המספר האחרון
+        new_message_thread2 = false; // מעדכן שאין הודעה חדשה
     }
 }
 
-// פונקציה לתהליך 3
 void threadFunction3() {
     while (true) {
-        unique_lock<mutex> lock(mtx); // לוקח את המנעול
-        cv.wait_for(lock, chrono::seconds(check_interval_seconds), [] {
-            return new_message_thread1 || new_message_thread2;
-            }); // מחכה לתנאים שיתקיימו או עד הזמן שהוקצב
+        this_thread::sleep_for(chrono::seconds(check_interval_seconds)); // מחכה 5 שניות
 
-        if (!new_message_thread1 && !new_message_thread2) { // אם אין הודעות חדשות
-            continue; // חוזר להתחלה
-        }
+        unique_lock<mutex> lock(mtx);
+        cout << "[Thread 3] Checking numbers..." << endl;
+        cout << "[Thread 3] Thread 1 Queue Size: " << thread1_messages.size() << endl;
+        cout << "[Thread 3] Thread 2 Queue Size: " << thread2_messages.size() << endl;
 
-        cout << "[Thread 3] Checking numbers..." << endl; // מתחיל לבדוק מספרים
-
-        // משווה בין המספרים בתורים של תהליך 1 ותהליך 2
         while (!thread1_messages.empty() && !thread2_messages.empty()) {
-            int num1 = thread1_messages.front(); // מקבל את המספר הראשון
-            int num2 = thread2_messages.front(); // מקבל את המספר השני
+            int num1 = thread1_messages.front();
+            int num2 = thread2_messages.front();
+            cout << "[Thread 3] Thread1_messages.front: " << num1 << endl;
+            cout << "[Thread 3] Thread1_messages.front: " << num2 << endl;
 
-            cout << "[Thread 3] Comparing " << num1 << " (Thread 1) and " << num2 << " (Thread 2)" << endl; // מדפיס את המספרים להשוואה
+            cout << "[Thread 3] Comparing " << num1 << " (Thread 1) and " << num2 << " (Thread 2)" << endl;
 
-            if (num1 == num2) { // אם המספרים תואמים
-                cout << "[Thread 3] Found common number: " << num1 << endl; // מדפיס את המספר המשותף
-                thread1_messages.pop(); // מסיר את המספר מהתור של תהליך 1
-                thread2_messages.pop(); // מסיר את המספר מהתור של תהליך 2
+            if (num1 == num2) {
+                cout << "[Thread 3] Found common number: " << num1 << endl;
+                thread1_messages.pop();
+                thread2_messages.pop();
             }
             else if (num1 < num2) {
-                thread1_messages.pop(); // מסיר את המספר מהתור של תהליך 1
+                thread1_messages.pop();
+                cout << "[Thread 3] Removing " << num1 << " from Thread 1 queue" << endl;
             }
             else {
-                thread2_messages.pop(); // מסיר את המספר מהתור של תהליך 2
+                thread2_messages.pop();
+                cout << "[Thread 3] Removing " << num2 << " from Thread 2 queue" << endl;
             }
-        }
 
-        new_message_thread1 = false; // מעדכן שאין הודעות חדשות בתור של תהליך 1
-        new_message_thread2 = false; // מעדכן שאין הודעות חדשות בתור של תהליך 2
+        }
+        cout << "[Thread 3] After checking  numbers...  " << endl;
+        cout << "[Thread 3] Thread 1 Queue Size: " << thread1_messages.size() << endl;
+        cout << "[Thread 3] Thread 2 Queue Size: " << thread2_messages.size() << endl;
     }
 }
 
-// פונקציה ראשית
 int main() {
-    // יצירת ת'רדים
-    thread t1(threadFunction1);
-    thread t2(threadFunction2);
-    thread t3(threadFunction3);
+    cout << "Starting program" << endl;
+    thread t1(threadFunction1); // תהליך 1 פעיל לכל זמן הריצה
+    thread t2(threadFunction2); // תהליך 2 פעיל לכל זמן הריצה
+    thread t3(threadFunction3); // יוצרת תהליך 3
 
-    // המתנה לסיום הת'רדים
-    t1.join();
+    while (true) {
+        {
+            unique_lock<mutex> lock(mtx);
+            if (rand() % 2 == 0) {
+                number_to_send = generate_random_number(last_received_thread1+1, last_received_thread1 + 5);
+                last_received_thread1 = number_to_send;
+                cout << "[Main] Sending number: " << number_to_send << " send to thread1 " << endl;
+                new_message_thread1 = true; // מעדכן שיש הודעה חדשה           
+                cv_thread1.notify_one(); // מיידעת את thread 1
+            }
+            else {
+                number_to_send = generate_random_number(last_received_thread2+1, last_received_thread2 + 5);
+                last_received_thread2 = number_to_send;
+                cout << "[Main] Sending number: " << number_to_send << " send to thread2 " << endl;
+                new_message_thread2 = true; // מעדכן שיש הודעה חדשה
+                cv_thread2.notify_one(); // מיידעת את thread 2
+            }
+        }
+        this_thread::sleep_for(chrono::seconds(message_delay_seconds));
+    }
+
+    t1.join(); // צירוף התהליכים
     t2.join();
     t3.join();
 
-    return 0;
+    return 0; // סיום התוכנית
 }
