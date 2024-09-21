@@ -101,22 +101,44 @@ int main() {
     thread t2(threadFunction2); // תהליך 2 פעיל לכל זמן הריצה
     thread t3(threadFunction3); // יוצרת תהליך 3
 
+    int option = rand() % 3; // נבחר מספר בין 0 ל-2
+
     while (true) {
         {
+            option = rand() % 3; // נבחר מספר בין 0 ל-2
+            cout << "[Main] option: " << option << endl;
             unique_lock<mutex> lock(mtx);
-            if (rand() % 2 == 0) {
+            if (option == 0) {
                 number_to_send = generate_random_number(last_received_thread1+1, last_received_thread1 + 5);
                 last_received_thread1 = number_to_send;
                 cout << "[Main] Sending number: " << number_to_send << " send to thread1 " << endl;
                 new_message_thread1 = true; // מעדכן שיש הודעה חדשה           
                 cv_thread1.notify_one(); // מיידעת את thread 1
             }
-            else {
+            else if(option == 1){
                 number_to_send = generate_random_number(last_received_thread2+1, last_received_thread2 + 5);
                 last_received_thread2 = number_to_send;
                 cout << "[Main] Sending number: " << number_to_send << " send to thread2 " << endl;
                 new_message_thread2 = true; // מעדכן שיש הודעה חדשה
                 cv_thread2.notify_one(); // מיידעת את thread 2
+            }
+            else if (option == 2) {
+                // אופציה שליחה לשני התהליכים
+                if (last_received_thread1 < last_received_thread2) {
+                    number_to_send = generate_random_number(last_received_thread2 + 1, last_received_thread2 + 5);
+                }
+                else if (last_received_thread2 <= last_received_thread1) {
+                    number_to_send = generate_random_number(last_received_thread1 + 1, last_received_thread1 + 5);
+                }
+                last_received_thread1 = number_to_send;
+                last_received_thread2 = number_to_send;
+                new_message_thread1 = true; // מעדכן שיש הודעה חדשה           
+                new_message_thread2 = true; // מעדכן שיש הודעה חדשה
+                cv_thread1.notify_one(), cv_thread2.notify_one(); // מיידעת את thread 1 ו-thread 2
+
+
+                cout << "[Main] Sending number: " << last_received_thread1 << " send to thread1 " << endl;
+                cout << "[Main] Sending number: " << last_received_thread2 << " send to thread2 " << endl;
             }
         }
         this_thread::sleep_for(chrono::seconds(message_delay_seconds));
